@@ -25,6 +25,8 @@ data_dim = 9
 
 xy = np.loadtxt('data_1.csv', delimiter=',')  
 
+np.random.shuffle(xy) ##IGNORE YEAR DEPENDENCE
+
 dataX=xy[:,0:63]
 dataY=xy[:,63]
 
