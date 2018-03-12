@@ -1,0 +1,144 @@
+# -*- coding: utf-8 -*-
+"""
+AT FIRST, Time-Series with one place is treid
+"""
+
+# http://machinelearningmastery.com/time-series-prediction-lstm-recurrent-neural-networks-python-keras/
+import keras
+import numpy as np
+import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import Activation
+from keras.layers import Dense, LSTM, Dropout
+from sklearn.preprocessing import MinMaxScaler
+import os
+from keras.utils.vis_utils import plot_model
+import matplotlib.pyplot as plt
+
+np.random.seed(777)
+
+
+timesteps = seq_length = 7
+data_dim = 9
+
+# data
+
+xy = np.loadtxt('data_1.csv', delimiter=',')  
+
+dataX=xy[:,0:63]
+dataY=xy[:,63]
+
+# split to train and testing
+train_size = int(len(dataY) * 0.6)
+val_size=int(len(dataY)*0.2)
+nontest_size=train_size+val_size
+test_size = len(dataY) - train_size -val_size
+
+trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[nontest_size:len(dataX)])
+trainY, testY = np.array(dataY[0:train_size]), np.array(dataY[nontest_size:len(dataY)])
+
+valX=np.array(dataX[train_size:nontest_size])
+valY=np.array(dataY[train_size:nontest_size])
+
+
+
+### RESHPAE THE DATA
+trainX=np.reshape(trainX,(train_size,timesteps,data_dim))
+trainY=np.reshape(trainY,(train_size,1))
+testX=np.reshape(testX,(test_size,timesteps,data_dim))
+testY=np.reshape(testY,(test_size,1))
+valX=np.reshape(valX,(val_size,timesteps,data_dim))
+valY=np.reshape(valY,(val_size,1))
+
+model = Sequential()
+model.add(LSTM(9, input_shape=(timesteps,data_dim), return_sequences=True))
+model.add(Dropout(0.2))
+model.add(LSTM(9, return_sequences=False)) #DEEPER
+model.add(Dense(1))
+model.add(Activation("linear"))
+model.compile(loss='mean_squared_error', optimizer='adam')
+model.summary()
+
+
+#model = Sequential()
+#model.add(Dense(16, input_dim=63, activation='relu'))
+#model.add(Dense(4, activation='relu'))
+#model.add(Dense(1))
+#model.add(Activation("linear"))
+#model.compile(loss='mean_squared_error', optimizer='adam')
+#model.summary()
+
+
+
+# Store model graph in png
+# (Error occurs on in python interactive shell)
+plot_model(model, to_file=os.path.basename(__file__) + '.png', show_shapes=True)
+
+print(trainX.shape, trainY.shape)
+
+
+
+hist=model.fit(trainX, trainY, epochs=150,validation_data=(valX, valY))
+
+# make predictions
+testPredict = model.predict(testX)
+
+# inverse values
+# testPredict = scaler.transform(testPredict)
+# testY = scaler.transform(testY)
+
+# print(testPredict)
+plt.plot(testY)
+plt.plot(testPredict)
+plt.legend(['True', 'Predict'], loc='upper left')
+plt.show()
+
+
+
+# 5. 학습과정 살펴보기
+plt.plot(hist.history['loss'])
+plt.plot(hist.history['val_loss'])
+plt.ylim(0.0, 0.03)
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+
+# 6. 모델 평가하기
+trainScore = model.evaluate(trainX, trainY, verbose=0)
+model.reset_states()
+print('Train Score: ', trainScore)
+valScore = model.evaluate(valX, valY, verbose=0)
+model.reset_states()
+print('Validataion Score: ', valScore)
+testScore = model.evaluate(testX, testY, verbose=0)
+model.reset_states()
+print('Test Score: ', testScore)
+
+#T-1값과의 비교
+test_predict = model.predict(testX, verbose=0)
+test_minus1=np.array(dataY[(nontest_size-1):(len(dataY)-1)])
+
+plt.plot(testY)
+plt.plot(test_predict)
+#plt.plot(test_minus1)
+plt.legend(['True', 'prediction','benchmark'], loc='upper left')
+plt.show()
+
+test_mse = keras.losses.mean_squared_error(testY, test_predict)
+bench_mse = keras.losses.mean_squared_error(testY, test_minus1)
+#test_mse = tf.Session().run(test_mse)
+#bench_mse = tf.Session().run(bench_mse)
+#test_mse = np.mean(test_mse)
+#bench_mse = np.mean(bench_mse)
+#print(test_mse, bench_mse)
+
+
+
+## 레이어 구조 시각화
+
+from IPython.display import SVG
+from keras.utils.vis_utils import model_to_dot
+
+SVG(model_to_dot(model, show_shapes=True).create(prog='dot', format='svg'))
