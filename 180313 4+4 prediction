@@ -17,8 +17,6 @@ import os
 from keras.utils.vis_utils import plot_model
 import matplotlib.pyplot as plt
 
-import seq2seq
-from seq2seq.models import SimpleSeq2Seq
 np.random.seed(777)
 
 timesteps = seq_length = 4
