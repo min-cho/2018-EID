@@ -1,0 +1,170 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Mar 13 18:32:20 2018
+
+edit to multistep prediction based on
+https://tykimos.github.io/2017/04/09/RNN_Layer_Talk/
+
+"""
+import keras
+import numpy as np
+import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import Activation
+from keras.layers import Dense, LSTM, Dropout
+from sklearn.preprocessing import MinMaxScaler
+import os
+from keras.utils.vis_utils import plot_model
+import matplotlib.pyplot as plt
+
+import seq2seq
+from seq2seq.models import SimpleSeq2Seq
+np.random.seed(777)
+
+timesteps = seq_length = 4
+data_dim = 9
+
+# data
+
+xy = np.loadtxt('data_1.csv', delimiter=',')  
+
+np.random.shuffle(xy)
+
+#### 중장기 예측을 위한 4+4 분할 ***********************
+
+
+dataX=xy[:,0:36]
+dataY=xy[:,(44,53,62,63)]
+
+# split to train and testing
+train_size = int(len(dataY) * 0.6)
+val_size=int(len(dataY)*0.2)
+nontest_size=train_size+val_size
+test_size = len(dataY) - train_size -val_size
+
+trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[nontest_size:len(dataX)])
+trainY, testY = np.array(dataY[0:train_size]), np.array(dataY[nontest_size:len(dataY)])
+
+valX=np.array(dataX[train_size:nontest_size])
+valY=np.array(dataY[train_size:nontest_size])
+
+### RESHPAE THE DATA
+trainX=np.reshape(trainX,(train_size,timesteps,data_dim))
+trainY=np.reshape(trainY,(train_size,4))
+testX=np.reshape(testX,(test_size,timesteps,data_dim))
+testY=np.reshape(testY,(test_size,4))
+valX=np.reshape(valX,(val_size,timesteps,data_dim))
+valY=np.reshape(valY,(val_size,4))
+
+
+### Build MODEL##
+
+model = Sequential()
+model.add(LSTM(4, input_shape=(timesteps,data_dim), return_sequences=True))
+#model.add(Dropout(0.2))
+model.add(LSTM(4, return_sequences=False)) #DEEPER
+model.add(Dense(4))
+model.add(Activation("linear"))
+model.compile(loss='mean_squared_error', optimizer='adam')
+model.summary()
+
+
+
+## Ver. Dense #######################################################################################################
+
+dataX=xy[:,0:36]
+dataY=xy[:,(44,53,62,63)]
+
+# split to train and testing
+train_size = int(len(dataY) * 0.6)
+val_size=int(len(dataY)*0.2)
+nontest_size=train_size+val_size
+test_size = len(dataY) - train_size -val_size
+
+trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[nontest_size:len(dataX)])
+trainY, testY = np.array(dataY[0:train_size]), np.array(dataY[nontest_size:len(dataY)])
+
+valX=np.array(dataX[train_size:nontest_size])
+valY=np.array(dataY[train_size:nontest_size])
+
+
+model = Sequential()
+model.add(Dense(36, input_dim=36, activation='relu'))
+model.add(Dense(6, activation='relu'))
+model.add(Dense(4))
+model.add(Activation("linear"))
+model.compile(loss='mean_squared_error', optimizer='adam')
+model.summary()
+
+hist=model.fit(trainX, trainY, epochs=200,validation_data=(valX, valY))
+
+# make predictions
+testPredict = model.predict(testX)
+plt.plot(testPredict)
+plt.legend(['True', 'Predict'], loc='upper left')
+plt.show()
+
+# 학습과정 살펴보기
+plt.plot(hist.history['loss'])
+plt.plot(hist.history['val_loss'])
+plt.ylim(0.0, 0.03)
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+trainScore = model.evaluate(trainX, trainY, verbose=0)
+model.reset_states()
+print('Train Score: ', trainScore)
+valScore = model.evaluate(valX, valY, verbose=0)
+model.reset_states()
+print('Validataion Score: ', valScore)
+testScore = model.evaluate(testX, testY, verbose=0)
+model.reset_states()
+print('Test Score: ', testScore)
+
+### 레이어 구조 시각화 ########################################################################################
+
+from IPython.display import SVG
+from keras.utils.vis_utils import model_to_dot
+SVG(model_to_dot(model, show_shapes=True).create(prog='dot', format='svg'))
+
+hist=model.fit(trainX, trainY, epochs=200,validation_data=(valX, valY))
+
+##########################################################################################################
+# make predictions
+testPredict = model.predict(testX)
+
+# inverse values
+# testPredict = scaler.transform(testPredict)
+# testY = scaler.transform(testY)
+
+# print(testPredict)
+plt.plot(testY)
+plt.plot(testPredict)
+plt.legend(['True', 'Predict'], loc='upper left')
+plt.show()
+
+
+# 5. 학습과정 살펴보기
+plt.plot(hist.history['loss'])
+plt.plot(hist.history['val_loss'])
+plt.ylim(0.0, 0.03)
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+
+# 6. 모델 평가하기
+trainScore = model.evaluate(trainX, trainY, verbose=0)
+model.reset_states()
+print('Train Score: ', trainScore)
+valScore = model.evaluate(valX, valY, verbose=0)
+model.reset_states()
+print('Validataion Score: ', valScore)
+testScore = model.evaluate(testX, testY, verbose=0)
+model.reset_states()
+print('Test Score: ', testScore)
+
+### 장기예측 결과 평가
