@@ -1,0 +1,121 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 19 21:56:45 2018
+
+based on : https://github.com/hunkim/DeepLearningZeroToAll/blob/master/keras/klab-12-5-seq2seq.py
+
+"""
+
+# https://gist.github.com/rouseguy/1122811f2375064d009dac797d59bae9
+import numpy as np
+import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import Activation, TimeDistributed, Dense, RepeatVector, LSTM, Dropout
+from keras.layers.normalization import BatchNormalization
+from keras.utils import np_utils
+from keras.callbacks import TensorBoard
+from sklearn.preprocessing import MinMaxScaler
+import os
+from keras.utils.vis_utils import plot_model
+import matplotlib.pyplot as plt
+
+
+np.random.seed(777)
+
+timesteps = seq_length = 4
+data_dim = 9
+
+# data
+
+xy = np.loadtxt('data_1.csv', delimiter=',')  
+
+np.random.shuffle(xy)
+
+##################### 중장기 예측을 위한 4+4 분할 ***********************
+dataX=xy[:,0:36]
+dataY=xy[:,(44,53,62,63)]
+
+# split to train and testing
+train_size = int(len(dataY) * 0.6)
+val_size=int(len(dataY)*0.1)
+nontest_size=train_size+val_size
+test_size = len(dataY) - train_size -val_size
+
+trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[nontest_size:len(dataX)])
+trainY, testY = np.array(dataY[0:train_size]), np.array(dataY[nontest_size:len(dataY)])
+
+valX=np.array(dataX[train_size:nontest_size])
+valY=np.array(dataY[train_size:nontest_size])
+
+### RESHPAE THE DATA
+trainX=np.reshape(trainX,(train_size,timesteps,data_dim))
+trainY=np.reshape(trainY,(train_size,timesteps,1))
+testX=np.reshape(testX,(test_size,timesteps,data_dim))
+testY=np.reshape(testY,(test_size,timesteps,1))
+valX=np.reshape(valX,(val_size,timesteps,data_dim))
+valY=np.reshape(valY,(val_size,timesteps,1))
+
+
+### Build MODEL#####################################################
+
+model = Sequential()
+model.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=False, kernel_initializer='random_normal'))
+model.add(BatchNormalization())
+#model.add(Dropout(0.2))
+
+# For the decoder's input, we repeat the encoded input for each time step
+model.add(RepeatVector(timesteps))
+
+# The decoder RNN could be multiple layers stacked or a single layer
+model.add(LSTM(4, return_sequences=True))
+#model.add(BatchNormalization())
+
+model.add(TimeDistributed(Dense(1)))
+model.add(Activation("linear"))
+model.compile(loss='mean_squared_error', optimizer='adam')
+model.summary()
+
+#####################
+
+
+hist=model.fit(trainX, trainY, epochs=500,validation_data=(valX, valY))
+
+# make predictions
+testPredict = model.predict(testX)
+
+# inverse values
+# testPredict = scaler.transform(testPredict)
+# testY = scaler.transform(testY)
+
+# print(testPredict)
+#plt.plot(testY)
+#plt.plot(testPredict)
+#plt.legend(['True', 'Predict'], loc='upper left')
+#plt.show()
+
+
+# 5. 학습과정 살펴보기
+plt.plot(hist.history['loss'])
+plt.plot(hist.history['val_loss'])
+plt.ylim(0.0, 0.03)
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+
+# 6. 모델 평가하기
+trainScore = model.evaluate(trainX, trainY, verbose=0)
+model.reset_states()
+print('Train Score: ', trainScore)
+valScore = model.evaluate(valX, valY, verbose=0)
+model.reset_states()
+print('Validataion Score: ', valScore)
+testScore = model.evaluate(testX, testY, verbose=0)
+model.reset_states()
+print('Test Score: ', testScore)
+
+
+from IPython.display import SVG
+from keras.utils.vis_utils import model_to_dot
+SVG(model_to_dot(model, show_shapes=True).create(prog='dot', format='svg'))
