@@ -1,0 +1,241 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat May 19 22:03:31 2018
+@author: cho
+"""
+
+import keras
+import numpy as np
+import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import Activation, TimeDistributed, Dense, RepeatVector, LSTM, Dropout
+from keras.layers.normalization import BatchNormalization
+import os
+from keras.utils.vis_utils import plot_model
+import matplotlib.pyplot as plt
+
+timesteps = seq_length = 4
+data_dim = 9
+
+chl_max = 107.5
+chl_min = 1.9
+
+# data
+
+xy = np.loadtxt('data_1.csv', delimiter=',')  
+
+np.random.seed(777)
+np.random.shuffle(xy)
+dataX=xy[:,0:36]
+dataY=xy[:,(44,53,62,63)]
+
+
+# split to train and testing
+train_size = int(len(dataY) * 0.6)
+val_size=int(len(dataY)*0.2)
+nontest_size=train_size+val_size
+test_size = len(dataY) - train_size -val_size
+
+trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[nontest_size:len(dataX)])
+trainY, testY = np.array(dataY[0:train_size]), np.array(dataY[nontest_size:len(dataY)])
+valX=np.array(dataX[train_size:nontest_size])
+valY=np.array(dataY[train_size:nontest_size])
+
+
+##############################################################################
+
+#model4 : 3 dense
+model4 = Sequential()
+model4.add(Dense(16, input_dim=36, activation='relu'))
+model4.add(Dense(8, activation='relu'))
+model4.add(Dense(4))
+model4.add(Activation("linear"))
+model4.compile(loss='mean_squared_error', optimizer='adam')
+model4.summary()
+
+##############################################################################
+
+#model41 : dropout
+model41 = Sequential()
+model41.add(Dense(16, input_dim=36, activation='relu'))
+model41.add(Dropout(0.2))
+model41.add(Dense(8, activation='relu'))
+model41.add(Dense(4))
+model41.add(Activation("linear"))
+model41.compile(loss='mean_squared_error', optimizer='adam')
+model41.summary()
+
+#model42 : dropout
+model42 = Sequential()
+model42.add(Dense(16, input_dim=36, activation='relu'))
+model42.add(BatchNormalization())
+model42.add(Dense(8, activation='relu'))
+model42.add(Dense(4))
+model42.add(Activation("linear"))
+model42.compile(loss='mean_squared_error', optimizer='adam')
+model42.summary()
+
+##############################################################################
+
+
+### RESHPAE THE DATA  to LSTM
+
+trainX=np.reshape(trainX,(train_size,timesteps,data_dim))
+trainY=np.reshape(trainY,(train_size,4))
+testX=np.reshape(testX,(test_size,timesteps,data_dim))
+testY=np.reshape(testY,(test_size,4))
+valX=np.reshape(valX,(val_size,timesteps,data_dim))
+valY=np.reshape(valY,(val_size,4))
+
+################
+
+
+# Model5 : 2LSTM
+
+model5 = Sequential()
+model5.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=True))
+model5.add(LSTM(9, return_sequences=False))
+model5.add(Dense(4))
+model5.add(Activation("linear"))
+model5.compile(loss='mean_squared_error', optimizer='adam')
+model5.summary()
+
+model51 = Sequential()
+model51.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=True))
+model51.add(Dropout(0.2))
+model51.add(LSTM(9, return_sequences=False))
+model51.add(Dense(4))
+model51.add(Activation("linear"))
+model51.compile(loss='mean_squared_error', optimizer='adam')
+model51.summary()
+
+
+model52 = Sequential()
+model52.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=True))
+model52.add(BatchNormalization())
+model52.add(LSTM(9, return_sequences=False))
+model52.add(Dense(4))
+model52.add(Activation("linear"))
+model52.compile(loss='mean_squared_error', optimizer='adam')
+model52.summary()
+
+
+
+##############################################################################
+
+# Model6 : seq2seq
+
+### RESHPAE THE DATA for seq2seq 
+
+trainX=np.reshape(trainX,(train_size,timesteps,data_dim))
+trainY=np.reshape(trainY,(train_size,timesteps,1))
+testX=np.reshape(testX,(test_size,timesteps,data_dim))
+testY=np.reshape(testY,(test_size,timesteps,1))
+valX=np.reshape(valX,(val_size,timesteps,data_dim))
+valY=np.reshape(valY,(val_size,timesteps,1))
+
+model7 = Sequential()
+model7.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=False, kernel_initializer='random_normal'))
+model7.add(RepeatVector(timesteps))
+model7.add(LSTM(4, return_sequences=True))
+model7.add(TimeDistributed(Dense(1)))
+model7.add(Activation("linear"))
+model7.compile(loss='mean_squared_error', optimizer='adam')
+model7.summary()
+
+
+model71 = Sequential()
+model71.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=False, kernel_initializer='random_normal'))
+model71.add(Dropout(0.2))
+model71.add(RepeatVector(timesteps))
+model71.add(LSTM(4, return_sequences=True))
+model71.add(TimeDistributed(Dense(1)))
+model71.add(Activation("linear"))
+model71.compile(loss='mean_squared_error', optimizer='adam')
+model71.summary()
+
+
+model72 = Sequential()
+model72.add(LSTM(16, input_shape=(timesteps,data_dim), return_sequences=False, kernel_initializer='random_normal'))
+model72.add(BatchNormalization())
+model72.add(RepeatVector(timesteps))
+model72.add(LSTM(4, return_sequences=True))
+model72.add(TimeDistributed(Dense(1)))
+model72.add(Activation("linear"))
+model72.compile(loss='mean_squared_error', optimizer='adam')
+model72.summary()
+
+
+################ training ###########################
+
+model = model7
+
+###
+# Store model graph in png # (Error occurs on in python interactive shell)
+#plot_model(model, to_file=os.path.basename(__file__) + '.png', show_shapes=True)
+#print(trainX.shape, trainY.shape)
+
+hist=model.fit(trainX, trainY, epochs=600,validation_data=(valX, valY))
+
+# make predictions
+testPredict = model.predict(testX)
+
+# PLOT with inverse values
+plt.plot(testY*(chl_max-chl_min)+chl_min)
+plt.plot(testPredict*(chl_max-chl_min)+chl_min)
+plt.legend(['True', 'Predict'], loc='upper left')
+plt.ylabel('Concentration of chl-a (mg/m3)')
+plt.xlabel('Days')
+plt.show()
+
+
+# 5. 학습과정 살펴보기
+plt.plot(hist.history['loss'])
+plt.plot(hist.history['val_loss'])
+plt.ylim(0.0, 0.03)
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+
+# 6. 모델 평가하기 - RMSE
+trainScore = model.evaluate(trainX, trainY, verbose=0) ** (.5)
+model.reset_states()
+print('Train Score: ', trainScore)
+valScore = model.evaluate(valX, valY, verbose=0) ** (.5)
+model.reset_states()
+print('Validataion Score: ', valScore)
+testScore = model.evaluate(testX, testY, verbose=0) ** (.5)
+model.reset_states()
+print('Test Score: ', testScore)
+
+
+## 레이어 구조 시각화
+from IPython.display import SVG
+from keras.utils.vis_utils import model_to_dot
+SVG(model_to_dot(model, show_shapes=True).create(prog='dot', format='svg'))
+
+
+
+
+#####
+# 6. 모델 저장하기
+#from keras.models import load_model
+#model.save('chl-a_model52.h5')
+
+# 4days plot
+
+test_data=np.reshape(testY,(test_size*timesteps,1))
+test_predict=np.reshape(testPredict,(test_size*timesteps,1))
+
+plt.figure(figsize=(15,5))
+plt.plot(test_data*(chl_max-chl_min)+chl_min)
+plt.plot(test_predict*(chl_max-chl_min)+chl_min)
+plt.legend(['True', 'Predict'], loc='upper left')
+plt.ylabel('Concentration of chl-a (mg/m3)')
+plt.xlabel('Days')
+plt.show()
+
+
+#plt.savefig('result_figure.svg', format='svg', dpi=1000)
